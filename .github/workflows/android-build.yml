@@ -1,0 +1,78 @@
+name: Build Android APK & Play Store AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - "index.html"
+      - "package.json"
+      - ".github/workflows/android-build.yml"
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install & Build Web App
+        run: |
+          npm install
+          npm run build
+
+      - name: Initialize Capacitor Android Project
+        run: |
+          npm install @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npx cap init "CML Competition Handler" "com.cml.competitionhandler" --web-dir dist
+          npx cap add android
+
+      - name: Configure Release Signing
+        run: |
+          cp android-signing/cml-release.jks android/app/cml-release.jks
+          python3 - << 'PYEOF'
+          p = "android/app/build.gradle"
+          with open(p, "r") as f:
+              g = f.read()
+          signing_block = """
+              signingConfigs {
+                  release {
+                      storeFile file("cml-release.jks")
+                      storePassword "cml@2026store"
+                      keyAlias "cmlkey"
+                      keyPassword "cml@2026store"
+                  }
+              }
+          """
+          g = g.replace("buildTypes {", signing_block + "\n    buildTypes {", 1)
+          g = g.replace("minifyEnabled false", "minifyEnabled false\n            signingConfig signingConfigs.release", 1)
+          with open(p, "w") as f:
+              f.write(g)
+          PYEOF
+
+      - name: Build Signed APK and Play Store AAB
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease bundleRelease
+
+      - name: Upload Installable APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cml-android-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: Upload Google Play Store AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: cml-playstore-aab
+          path: android/app/build/outputs/bundle/release/app-release.aab
