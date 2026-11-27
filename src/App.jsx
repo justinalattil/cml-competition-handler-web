@@ -516,9 +516,23 @@ export default function App() {
     if (!canEditWinners && activeTab === 'winners-entry') setActiveTab('home');
   }, [isAdmin, canEditParticipants, canEditWinners, activeTab]);
 
-  const handleAdminLogin = (e) => {
+  const handleAdminLogin = async (e) => {
     e.preventDefault();
-    if (adminPasswordInput === adminPassword) {
+    let effectivePassword = adminPassword;
+    try {
+      const remote = await loadDbFromSupabase();
+      if (remote && typeof remote === 'object' && remote.years) {
+        setDb(remote);
+        localStorage.setItem('cml_db', JSON.stringify(remote));
+        setCloudStatus('connected');
+        if (remote.settings?.adminPassword) {
+          effectivePassword = remote.settings.adminPassword;
+        }
+      }
+    } catch (err) {
+      console.error('Supabase refresh during login failed:', err);
+    }
+    if (adminPasswordInput === effectivePassword) {
       setIsAdmin(true);
       sessionStorage.setItem('cml_is_admin', 'true');
       setShowAdminLoginModal(false);

@@ -34,6 +34,7 @@ export async function loadDbFromSupabase() {
 
   const res = await fetch(`${url}/rest/v1/cml_store?id=eq.main&select=data`, {
     method: 'GET',
+    cache: 'no-store',
     headers: buildHeaders(anonKey)
   });
 
