@@ -94,6 +94,10 @@ export default function App() {
   const [supabaseUrlInput, setSupabaseUrlInput] = useState(() => getSupabaseConfig().url);
   const [supabaseKeyInput, setSupabaseKeyInput] = useState(() => getSupabaseConfig().anonKey);
   const [cloudStatus, setCloudStatus] = useState(() => getSupabaseConfig().url && getSupabaseConfig().anonKey ? 'connected' : 'local');
+  const [isAdmin, setIsAdmin] = useState(() => sessionStorage.getItem('cml_is_admin') === 'true');
+  const [showAdminLoginModal, setShowAdminLoginModal] = useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = useState('');
+  const [newAdminPasswordInput, setNewAdminPasswordInput] = useState('');
 
   // Search & Filter States for Participants Modal
   const [partSearch, setPartSearch] = useState("");
@@ -404,7 +408,7 @@ export default function App() {
     showGroupPrintModal || showResultsModal || showEditResultsModal ||
     showMasterIdModal || showRupathaModal || showMergeModal ||
     editResultModal.show || mergeConflictModal.show || conflictDetailsModal.show ||
-    confirmClearModal || confirmResetDbModal || warningModal.show
+    confirmClearModal || confirmResetDbModal || warningModal.show || showAdminLoginModal
   );
   useEffect(() => {
     if (isAnyModalOpen) {
@@ -499,6 +503,64 @@ export default function App() {
   const ageCategoryRules = yearData.ageCategoryRules || JSON.parse(JSON.stringify(DEFAULT_DOB_RANGES));
   const participants = yearData.participants || [];
   const results = yearData.results || [];
+
+  // Public Access & Admin Settings (synced via Supabase db.settings)
+  const publicAccess = db?.settings?.publicAccess || { allowParticipantsEdit: false, allowWinnersEdit: false };
+  const adminPassword = db?.settings?.adminPassword || 'cml@2026';
+  const canEditParticipants = isAdmin || Boolean(publicAccess.allowParticipantsEdit);
+  const canEditWinners = isAdmin || Boolean(publicAccess.allowWinnersEdit);
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'settings') setActiveTab('home');
+    if (!canEditParticipants && activeTab === 'participants') setActiveTab('home');
+    if (!canEditWinners && activeTab === 'winners-entry') setActiveTab('home');
+  }, [isAdmin, canEditParticipants, canEditWinners, activeTab]);
+
+  const handleAdminLogin = (e) => {
+    e.preventDefault();
+    if (adminPasswordInput === adminPassword) {
+      setIsAdmin(true);
+      sessionStorage.setItem('cml_is_admin', 'true');
+      setShowAdminLoginModal(false);
+      setAdminPasswordInput('');
+      showToast('അഡ്മിൻ ലോഗിൻ വിജയകരം!', 'success');
+    } else {
+      showToast('തെറ്റായ അഡ്മിൻ പാസ്‌വേഡ്!', 'error');
+    }
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    sessionStorage.removeItem('cml_is_admin');
+    if (activeTab === 'settings') setActiveTab('home');
+    showToast('അഡ്മിൻ ലോഗ് ഔട്ട് ചെയ്തു.', 'info');
+  };
+
+  const handleTogglePublicAccess = (field) => {
+    const updatedDb = JSON.parse(JSON.stringify(db));
+    if (!updatedDb.settings) updatedDb.settings = { currentYear };
+    if (!updatedDb.settings.publicAccess) {
+      updatedDb.settings.publicAccess = { allowParticipantsEdit: false, allowWinnersEdit: false };
+    }
+    updatedDb.settings.publicAccess[field] = !updatedDb.settings.publicAccess[field];
+    saveDb(updatedDb);
+    showToast('പബ്ലിക് ആക്സസ് ക്രമീകരണം അപ്ഡേറ്റ് ചെയ്തു!', 'success');
+  };
+
+  const handleUpdateAdminPassword = (e) => {
+    e.preventDefault();
+    const pwd = newAdminPasswordInput.trim();
+    if (pwd.length < 4) {
+      showToast('പാസ്‌വേഡ് കുറഞ്ഞത് 4 അക്ഷരമെങ്കിലും വേണം!', 'error');
+      return;
+    }
+    const updatedDb = JSON.parse(JSON.stringify(db));
+    if (!updatedDb.settings) updatedDb.settings = { currentYear };
+    updatedDb.settings.adminPassword = pwd;
+    saveDb(updatedDb);
+    setNewAdminPasswordInput('');
+    showToast('അഡ്മിൻ പാസ്‌വേഡ് മാറ്റി!', 'success');
+  };
 
   // Strictly calculate parishes that have AT LEAST 1 participant registered for the selected Group Item
   const registeredParishesForGroupItem = useMemo(() => {
@@ -4635,7 +4697,8 @@ export default function App() {
           </div>
         </div>
 
-        {/* Global Competition Category Switcher */}
+        {/* Global Competition Category Switcher (Admin Only) */}
+        {isAdmin && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(255,255,255,0.15)', padding: '4px 8px', borderRadius: '20px' }}>
           <span style={{ fontSize: '0.8rem', fontWeight: '600' }}>മത്സരം:</span>
           <button 
@@ -4663,6 +4726,7 @@ export default function App() {
             രണ്ടും (Both)
           </button>
         </div>
+        )}
 
         <div className="header-right">
           <button
@@ -4688,6 +4752,29 @@ export default function App() {
             </select>
           </div>
 
+          {isAdmin ? (
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={handleAdminLogout}
+              title="Admin Logged In — Click to Logout"
+              style={{ width: 'auto', borderRadius: '8px', padding: '0 10px', gap: '5px', fontSize: '0.78rem', fontWeight: '700', backgroundColor: 'rgba(245, 158, 11, 0.35)' }}
+            >
+              <Key size={14} />
+              <span>Admin (Logout)</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setShowAdminLoginModal(true)}
+              title="Admin Login"
+              style={{ width: 'auto', borderRadius: '8px', padding: '0 10px', gap: '5px', fontSize: '0.78rem', fontWeight: '700', backgroundColor: 'rgba(255, 255, 255, 0.18)' }}
+            >
+              <Key size={14} />
+              <span>Admin Login</span>
+            </button>
+          )}
           <button className="theme-toggle" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}>
             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
           </button>
@@ -4699,18 +4786,28 @@ export default function App() {
         <button className={`nav-tab ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
           <Trophy size={18} /> ഹോം (Home)
         </button>
-        <button className={`nav-tab ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => setActiveTab('participants')}>
-          <Users size={18} /> മത്സരാർത്ഥികൾ (Participants)
-        </button>
-        <button className={`nav-tab ${activeTab === 'winners-entry' ? 'active' : ''}`} onClick={() => setActiveTab('winners-entry')}>
-          <Award size={18} /> വിജയികളെ ചേർക്കുക (Enter Winners)
-        </button>
+        {canEditParticipants ? (
+          <button className={`nav-tab ${activeTab === 'participants' ? 'active' : ''}`} onClick={() => canEditParticipants ? setActiveTab('participants') : setShowParticipantsModal(true)}>
+            <Users size={18} /> മത്സരാർത്ഥികൾ (Participants)
+          </button>
+        ) : (
+          <button className="nav-tab" onClick={() => setShowParticipantsModal(true)}>
+            <Users size={18} /> മത്സരാർത്ഥികൾ (View)
+          </button>
+        )}
+        {canEditWinners && (
+          <button className={`nav-tab ${activeTab === 'winners-entry' ? 'active' : ''}`} onClick={() => setActiveTab('winners-entry')}>
+            <Award size={18} /> വിജയികളെ ചേർക്കുക (Enter Winners)
+          </button>
+        )}
         <button className={`nav-tab ${activeTab === 'results-view' ? 'active' : ''}`} onClick={() => setActiveTab('results-view')}>
           <FileText size={18} /> ഫലങ്ങൾ (Results View)
         </button>
-        <button className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-          <SettingsIcon size={18} /> ക്രമീകരണങ്ങൾ (Settings)
-        </button>
+        {isAdmin && (
+          <button className={`nav-tab ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
+            <SettingsIcon size={18} /> ക്രമീകരണങ്ങൾ (Settings)
+          </button>
+        )}
       </nav>
 
       {/* 1. DEDICATED PRINT ONLY SECTION FOR REGISTERED PARTICIPANTS ROSTER */}
@@ -5150,7 +5247,7 @@ export default function App() {
         )}
 
         {/* --- Tab 2: Participants Registration Form & Modal Trigger Bar --- */}
-        {activeTab === 'participants' && (
+        {activeTab === 'participants' && canEditParticipants && (
           <div>
             {/* Registration Form */}
             <div className="card no-print">
@@ -5557,7 +5654,7 @@ export default function App() {
         )}
 
         {/* --- Tab 3: Enter Winners --- */}
-        {activeTab === 'winners-entry' && (
+        {activeTab === 'winners-entry' && canEditWinners && (
           <div>
             <div className="card no-print">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -6279,9 +6376,54 @@ export default function App() {
         )}
 
         {/* --- Tab 5: Settings --- */}
-        {activeTab === 'settings' && (
+        {activeTab === 'settings' && isAdmin && (
           <div className="card">
             <h2 className="card-title">സിസ്റ്റം ക്രമീകരണങ്ങൾ (Settings Panel)</h2>
+            {/* Admin Public Access Controls */}
+            <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', padding: '1.25rem', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: '5px solid #7c3aed' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: '0 0 0.5rem 0', color: '#7c3aed' }}>
+                പബ്ലിക് ആക്സസ് നിയന്ത്രണം (Public Access &amp; Admin Controls)
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0 0 1rem 0' }}>
+                അഡ്മിൻ ലോഗിൻ ചെയ്യാത്ത സാധാരണ ഉപയോക്താക്കൾക്ക് (Public) ഏതൊക്കെ എഡിറ്റിംഗ് പേജുകൾ തുറന്നുനൽകണമെന്ന് ഇവിടെ നിയന്ത്രിക്കാം.
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.92rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(publicAccess.allowParticipantsEdit)}
+                    onChange={() => handleTogglePublicAccess('allowParticipantsEdit')}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span>മത്സരാർത്ഥികളെ ചേർക്കാനും എഡിറ്റ് ചെയ്യാനും പബ്ലിക്കിന് അനുവാദം നൽകുക (Allow Public Add/Edit Participants)</span>
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', fontWeight: '600', fontSize: '0.92rem' }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(publicAccess.allowWinnersEdit)}
+                    onChange={() => handleTogglePublicAccess('allowWinnersEdit')}
+                    style={{ width: '18px', height: '18px' }}
+                  />
+                  <span>വിജയികളെയും ഫലങ്ങളെയും ചേർക്കാനും എഡിറ്റ് ചെയ്യാനും പബ്ലിക്കിന് അനുവാദം നൽകുക (Allow Public Add/Edit Winners)</span>
+                </label>
+              </div>
+              <form onSubmit={handleUpdateAdminPassword} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ margin: 0, minWidth: '220px', flex: 1 }}>
+                  <label className="form-label">Change Admin Password (നിലവിലെ പാസ്‌വേഡ് മാറ്റുക)</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="New admin password (min 4 chars)"
+                    value={newAdminPasswordInput}
+                    onChange={(e) => setNewAdminPasswordInput(e.target.value)}
+                  />
+                </div>
+                <button type="submit" className="btn btn-primary">
+                  <Key size={15} /> Update Password
+                </button>
+              </form>
+            </div>
+
             {/* Supabase Cloud Backend Config */}
             <div style={{ marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', padding: '1.25rem', backgroundColor: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', borderLeft: `5px solid ${cloudStatus === 'connected' ? '#16a34a' : '#d97706'}` }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 'bold', margin: '0 0 0.5rem 0', color: 'var(--primary-color)' }}>
@@ -6999,7 +7141,7 @@ export default function App() {
                           ? (partSelectedItems.length > 0 ? `തിരഞ്ഞെടുത്ത ഇനങ്ങൾ (${partSelectedItems.length})` : 'രജിസ്റ്റർ ചെയ്ത ഇനങ്ങൾ') 
                           : (partItemFilter ? `മത്സര ഇനം (${getItemDisplayName(partItemFilter)})` : 'രജിസ്റ്റർ ചെയ്ത ഇനങ്ങൾ')}
                       </th>
-                      <th className="no-print">നടപടികൾ</th>
+                      {canEditParticipants && <th className="no-print">നടപടികൾ</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -7061,16 +7203,18 @@ export default function App() {
                             );
                           })()}
                         </td>
-                        <td className="no-print">
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={() => handleEditParticipant(p)}>
-                              <Edit2 size={14} />
-                            </button>
-                            <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => handleDeleteParticipant(p.id)}>
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
+                        {canEditParticipants && (
+                          <td className="no-print">
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button className="btn btn-secondary" style={{ padding: '4px 8px' }} onClick={() => handleEditParticipant(p)}>
+                                <Edit2 size={14} />
+                              </button>
+                              <button className="btn btn-danger" style={{ padding: '4px 8px' }} onClick={() => handleDeleteParticipant(p.id)}>
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                     {filteredParticipants.length === 0 && (
@@ -9870,6 +10014,48 @@ export default function App() {
                 മനസ്സിലായി (OK, Close)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Login Modal */}
+      {showAdminLoginModal && (
+        <div className="modal-overlay" style={{ zIndex: 10001 }}>
+          <div className="modal-content" style={{ maxWidth: '420px', width: '92vw', minHeight: 'auto' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Key size={20} style={{ color: 'var(--primary-color)' }} />
+                <span>അഡ്മിൻ ലോഗിൻ (Admin Login)</span>
+              </div>
+              <div className="titlebar-controls">
+                <button type="button" className="titlebar-btn close-btn" onClick={() => setShowAdminLoginModal(false)}>
+                  <XCircle size={16} />
+                </button>
+              </div>
+            </div>
+            <form onSubmit={handleAdminLogin}>
+              <div className="modal-body">
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: 0 }}>
+                  മുഴുവൻ പേജുകളും സെറ്റിംഗ്സും തുറക്കാൻ അഡ്മിൻ പാസ്‌വേഡ് നൽകുക. (Default: <code>cml@2026</code>)
+                </p>
+                <div className="form-group">
+                  <label className="form-label">Admin Password</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    autoFocus
+                    placeholder="Enter admin password..."
+                    value={adminPasswordInput}
+                    onChange={(e) => setAdminPasswordInput(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAdminLoginModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Login as Admin</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
