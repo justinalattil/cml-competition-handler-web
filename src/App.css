@@ -645,3 +645,44 @@ body,
     color: #000000;
   }
 }
+
+/* --- Modal Scroll Lock & Mobile Popup Scrolling Fix --- */
+html:has(.modal-overlay),
+body:has(.modal-overlay) {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+}
+
+.modal-overlay {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.modal-content {
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+@media (max-width: 768px) {
+  .modal-content {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .modal-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    flex-shrink: 0;
+  }
+
+  .modal-body {
+    overflow-y: visible !important;
+    flex: 1 0 auto !important;
+    max-height: none !important;
+  }
+
+  .modal-footer {
+    flex-shrink: 0;
+  }
+}
