@@ -398,6 +398,28 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Lock background page scroll whenever any modal is open (especially for mobile browsers)
+  const isAnyModalOpen = Boolean(
+    showParticipantsModal || showAllottedChestModal || showChestManagementModal ||
+    showGroupPrintModal || showResultsModal || showEditResultsModal ||
+    showMasterIdModal || showRupathaModal || showMergeModal ||
+    editResultModal.show || mergeConflictModal.show || conflictDetailsModal.show ||
+    confirmClearModal || confirmResetDbModal || warningModal.show
+  );
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isAnyModalOpen]);
+
   // Helper to save DB safely
   const saveDb = async (newDb) => {
     setDb(newDb);

@@ -655,30 +655,39 @@ body:has(.modal-overlay) {
 
 .modal-overlay {
   overscroll-behavior: contain;
-  touch-action: pan-y;
-}
-
-.modal-content {
-  overscroll-behavior: contain;
-  touch-action: pan-y;
 }
 
 @media (max-width: 768px) {
-  .modal-content {
+  .modal-overlay {
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
     overflow-y: auto !important;
+    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
+    padding: 0 !important;
+  }
+
+  .modal-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 100dvh;
+    overflow: visible !important;
+    border-radius: 0 !important;
   }
 
   .modal-header {
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: 30;
     flex-shrink: 0;
   }
 
   .modal-body {
     overflow-y: visible !important;
-    flex: 1 0 auto !important;
+    overflow-x: visible !important;
+    flex: none !important;
     max-height: none !important;
   }
 
