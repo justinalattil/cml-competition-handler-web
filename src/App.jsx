@@ -417,6 +417,36 @@ export default function App() {
     }
   };
 
+  const handleSyncFromCloud = async () => {
+    try {
+      const remote = await loadDbFromSupabase();
+      if (remote && typeof remote === 'object' && remote.years) {
+        setDb(remote);
+        localStorage.setItem('cml_db', JSON.stringify(remote));
+        if (remote.settings?.currentYear) setCurrentYear(remote.settings.currentYear);
+        setCloudStatus('connected');
+        showToast('ക്ലൗഡിൽ നിന്ന് പുതിയ ഡാറ്റ ലോഡ് ചെയ്തു!', 'success');
+      } else {
+        showToast('ക്ലൗഡിൽ ഡാറ്റയൊന്നും കണ്ടെത്തിയില്ല.', 'info');
+      }
+    } catch (err) {
+      setCloudStatus('error');
+      showToast('ക്ലൗഡ് സിങ്ക് പിശക്: ' + err.message, 'error');
+    }
+  };
+
+  const handlePushToCloud = async () => {
+    if (!db) return;
+    try {
+      await saveDbToSupabase(db);
+      setCloudStatus('connected');
+      showToast('ഈ ഉപകരണത്തിലെ ഡാറ്റ ക്ലൗഡിലേക്ക് അപ്‌ലോഡ് ചെയ്തു!', 'success');
+    } catch (err) {
+      setCloudStatus('error');
+      showToast('ക്ലൗഡ് അപ്‌ലോഡ് പിശക്: ' + err.message, 'error');
+    }
+  };
+
   const yearData = useMemo(() => {
     if (!db) return { activeCategory: "both", ageCategoryRules: JSON.parse(JSON.stringify(DEFAULT_DOB_RANGES)), participants: [], results: [] };
     if (!db.years[currentYear]) {
@@ -4613,6 +4643,16 @@ export default function App() {
         </div>
 
         <div className="header-right">
+          <button
+            type="button"
+            className="theme-toggle"
+            title={cloudStatus === 'connected' ? 'Cloud Synced — Click to Refresh' : 'Sync with Cloud'}
+            onClick={handleSyncFromCloud}
+            style={{ width: 'auto', borderRadius: '8px', padding: '0 10px', gap: '5px', fontSize: '0.78rem', fontWeight: '700', backgroundColor: cloudStatus === 'connected' ? 'rgba(22, 163, 74, 0.35)' : cloudStatus === 'error' ? 'rgba(220, 38, 38, 0.45)' : 'rgba(255,255,255,0.18)' }}
+          >
+            <RefreshCw size={14} />
+            <span>{cloudStatus === 'connected' ? 'Cloud' : cloudStatus === 'error' ? 'Sync Error' : 'Sync'}</span>
+          </button>
           <div className="year-selector">
             <span style={{ fontSize: '0.85rem' }}>വർഷം:</span>
             <select 
@@ -6267,6 +6307,12 @@ export default function App() {
                   }}
                 >
                   Connect &amp; Sync Supabase
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={handlePushToCloud}>
+                  <Upload size={15} /> Push This Device Data to Cloud
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={handleSyncFromCloud}>
+                  <RefreshCw size={15} /> Pull Latest Data from Cloud
                 </button>
               </div>
             </div>
